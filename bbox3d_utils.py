@@ -451,18 +451,8 @@ class BBox3DEstimator:
     
     def draw_box_3d(self, image, box_3d, color=(0, 255, 0), thickness=2):
         """
-        Draw enhanced 3D bounding box on image with better depth perception
-        
-        Args:
-            image (numpy.ndarray): Image to draw on
-            box_3d (dict): 3D bounding box parameters
-            color (tuple): Color in BGR format
-            thickness (int): Line thickness
-            
-        Returns:
-            numpy.ndarray: Image with 3D box drawn
+        Draw simplified 3D bounding box on image (only class name).
         """
-        # Get 2D box coordinates
         x1, y1, x2, y2 = [int(coord) for coord in box_3d['bbox_2d']]
         
         # Get depth value for scaling
@@ -531,45 +521,10 @@ class BBox3DEstimator:
         
         # Get class name and object ID
         class_name = box_3d['class_name']
-        obj_id = box_3d['object_id'] if 'object_id' in box_3d else None
-        
-        # Draw text information
-        text_y = y1 - 10
-        if obj_id is not None:
-            cv2.putText(image, f"ID:{obj_id}", (x1, text_y), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            text_y -= 15
-        
-        cv2.putText(image, class_name, (x1, text_y), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        text_y -= 15
-        
-        # Get depth information if available
-        if 'depth_value' in box_3d:
-            depth_value = box_3d['depth_value']
-            depth_method = box_3d.get('depth_method', 'unknown')
-            depth_text = f"D:{depth_value:.2f} ({depth_method})"
-            cv2.putText(image, depth_text, (x1, text_y), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-            text_y -= 15
-        
-        # Get score if available
-        if 'score' in box_3d:
-            score = box_3d['score']
-            score_text = f"S:{score:.2f}"
-            cv2.putText(image, score_text, (x1, text_y), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        
-        # Draw a vertical line from the bottom of the box to the ground
-        # This helps with depth perception
-        ground_y = y2 + int(height * 0.2)  # A bit below the bottom of the box
-        cv2.line(image, (int((x1 + x2) / 2), y2), (int((x1 + x2) / 2), ground_y), color, thickness)
-        
-        # Draw a small circle at the bottom to represent the ground contact point
-        cv2.circle(image, (int((x1 + x2) / 2), ground_y), thickness * 2, color, -1)
-        
+        label_y = y1 - 10
+        cv2.putText(image, class_name, (x1, label_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
         return image
-    
     def cleanup_trackers(self, active_ids):
         """
         Clean up Kalman filters and history for objects that are no longer tracked
@@ -589,211 +544,90 @@ class BBox3DEstimator:
         for obj_id in list(self.box_history.keys()):
             if obj_id not in active_ids_set:
                 del self.box_history[obj_id]
-
 class BirdEyeView:
-    """
-    Bird's Eye View visualization
-    """
-    def __init__(self, size=(400, 400), scale=30, camera_height=1.2):
-        """
-        Initialize the Bird's Eye View visualizer
-        
-        Args:
-            size (tuple): Size of the BEV image (width, height)
-            scale (float): Scale factor (pixels per meter)
-            camera_height (float): Height of the camera above ground (meters)
-        """
+    def __init__(self, size=(600, 800), scale=50):
         self.width, self.height = size
         self.scale = scale
-        self.camera_height = camera_height
-        
-        # Create empty BEV image
+
         self.bev_image = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-        
-        # Set origin at the bottom center of the image
         self.origin_x = self.width // 2
-        self.origin_y = self.height - 50
-    
+        self.origin_y = self.height - 30
+
+        # Load icons (forward and reverse)
+        self.car_icon = cv2.imread('car_icon.png', cv2.IMREAD_UNCHANGED)
+        self.car_icon_rev = cv2.imread('car_icon_reverse.png', cv2.IMREAD_UNCHANGED)
+
+        self.truck_icon = cv2.imread('truck_icon.png', cv2.IMREAD_UNCHANGED)
+        self.truck_icon_rev = cv2.imread('truck_icon_reverse.png', cv2.IMREAD_UNCHANGED)
+
+        self.bus_icon = cv2.imread('bus_icon.png', cv2.IMREAD_UNCHANGED)
+        self.bus_icon_rev = cv2.imread('bus_icon_reverse.png', cv2.IMREAD_UNCHANGED)
+
+        print("Icons loaded.")
+
     def reset(self):
-        """
-        Reset the BEV image
-        """
-        # Create a dark background
         self.bev_image = np.zeros((self.height, self.width, 3), dtype=np.uint8)
-        self.bev_image[:, :] = (20, 20, 20)  # Dark gray background
-        
-        # Draw grid lines
-        grid_spacing = max(int(self.scale), 20)  # At least 20 pixels between grid lines
-        
-        # Draw horizontal grid lines
-        for y in range(self.origin_y, 0, -grid_spacing):
-            cv2.line(self.bev_image, (0, y), (self.width, y), (50, 50, 50), 1)
-        
-        # Draw vertical grid lines
-        for x in range(0, self.width, grid_spacing):
-            cv2.line(self.bev_image, (x, 0), (x, self.height), (50, 50, 50), 1)
-        
-        # Draw coordinate system
-        axis_length = min(80, self.height // 5)
-        
-        # X-axis (upward)
-        cv2.line(self.bev_image, 
-                (self.origin_x, self.origin_y), 
-                (self.origin_x, self.origin_y - axis_length), 
-                (0, 200, 0), 2)  # Green for X-axis
-        
-        # Y-axis (rightward)
-        cv2.line(self.bev_image, 
-                (self.origin_x, self.origin_y), 
-                (self.origin_x + axis_length, self.origin_y), 
-                (0, 0, 200), 2)  # Red for Y-axis
-        
-        # Add axis labels
-        cv2.putText(self.bev_image, "X", 
-                   (self.origin_x - 15, self.origin_y - axis_length + 15), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 0), 1)
-        
-        cv2.putText(self.bev_image, "Y", 
-                   (self.origin_x + axis_length - 15, self.origin_y + 20), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 200), 1)
-        
-        # Draw distance markers specifically for 1-5 meter range
-        # Use fixed steps of 1 meter with intermediate markers at 0.5 meters
-        for dist in [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]:
-            y = self.origin_y - int(dist * self.scale)
-            
-            if y < 20:  # Skip if too close to top
-                continue
-            
-            # Draw tick mark - thicker for whole meters
-            thickness = 2 if dist.is_integer() else 1
-            cv2.line(self.bev_image, 
-                    (self.origin_x - 5, y), 
-                    (self.origin_x + 5, y), 
-                    (120, 120, 120), thickness)
-            
-            # Only show text for whole meters
-            if dist.is_integer():
-                cv2.putText(self.bev_image, f"{int(dist)}m", 
-                           (self.origin_x + 10, y + 4), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (180, 180, 180), 1)
-    
-    def draw_box(self, box_3d, color=None):
-        """
-        Draw a more realistic representation of an object on the BEV image
-        
-        Args:
-            box_3d (dict): 3D bounding box parameters
-            color (tuple): Color in BGR format (None for automatic color based on class)
-        """
+        self.bev_image[:, :] = (20, 20, 20)
+
+    def overlay_icon(self, icon, position, scale=0.2):
+        ih, iw = int(icon.shape[0] * scale), int(icon.shape[1] * scale)
+        icon_resized = cv2.resize(icon, (iw, ih))
+
+        x, y = position
+        x1, y1 = x - iw // 2, y - ih // 2
+
+        if x1 < 0 or y1 < 0 or x1 + iw > self.width or y1 + ih > self.height:
+            return
+
+        roi = self.bev_image[y1:y1+ih, x1:x1+iw]
+
+        if icon_resized.shape[2] == 4:
+            alpha_s = icon_resized[:, :, 3] / 255.0
+            alpha_l = 1.0 - alpha_s
+            for c in range(3):
+                roi[:, :, c] = (alpha_s * icon_resized[:, :, c] + alpha_l * roi[:, :, c])
+        else:
+            roi[:] = icon_resized
+
+    def draw_box(self, box_3d):
         try:
-            # Extract parameters
             class_name = box_3d['class_name'].lower()
-            
-            # Scale depth to fit within 1-5 meters range
             depth_value = box_3d.get('depth_value', 0.5)
-            # Map depth value (0-1) to a range of 1-5 meters
-            depth = 1.0 + depth_value * 4.0
-            
-            # Get 2D box dimensions for size estimation
-            if 'bbox_2d' in box_3d:
-                x1, y1, x2, y2 = box_3d['bbox_2d']
-                width_2d = x2 - x1
-                height_2d = y2 - y1
-                size_factor = width_2d / 100
-                size_factor = max(0.5, min(size_factor, 2.0))
-            else:
-                size_factor = 1.0
-            
-            # Determine color based on class
-            if color is None:
-                if 'car' in class_name or 'vehicle' in class_name:
-                    color = (0, 0, 255)  # Red
-                elif 'truck' in class_name or 'bus' in class_name:
-                    color = (0, 165, 255)  # Orange
-                elif 'person' in class_name:
-                    color = (0, 255, 0)  # Green
-                elif 'bicycle' in class_name or 'motorcycle' in class_name:
-                    color = (255, 0, 0)  # Blue
-                elif 'potted plant' in class_name or 'plant' in class_name:
-                    color = (0, 255, 255)  # Yellow
-                else:
-                    color = (255, 255, 255)  # White
-            
-            # Get object ID if available
-            obj_id = box_3d.get('object_id', None)
-            
-            # Calculate position in BEV with flipped axes
-            # X-axis points upward, Y-axis points rightward
-            
-            # Calculate Y position (upward) based on depth
+            depth = 1 + depth_value * 9
+
+            x1, y1, x2, y2 = box_3d['bbox_2d']
+            center_x_2d = (x1 + x2) / 2
+            lane_offset = int((center_x_2d / 1280 - 0.5) * self.scale * 4)
+
+            bev_x = self.origin_x + lane_offset
             bev_y = self.origin_y - int(depth * self.scale)
-            
-            # Calculate X position (rightward) based on horizontal position in image
-            if 'bbox_2d' in box_3d:
-                center_x_2d = (x1 + x2) / 2
-                image_width = self.bev_image.shape[1]
-                rel_x = (center_x_2d / image_width) - 0.5
-                bev_x = self.origin_x + int(rel_x * self.width * 0.6)
+
+            # --- Determine Forward or Reverse ---
+            orientation_rad = box_3d.get('orientation', 0.0)
+            angle_deg = np.degrees(orientation_rad) % 360
+
+            is_reverse = angle_deg > 90 and angle_deg < 270  # Between 90° and 270°
+
+            # --- Select Icon Based on Class and Direction ---
+            if 'bus' in class_name:
+                icon = self.bus_icon_rev if is_reverse else self.bus_icon
+                self.overlay_icon(icon, (bev_x, bev_y), scale=0.15)
+
+            elif 'truck' in class_name:
+                icon = self.truck_icon_rev if is_reverse else self.truck_icon
+                self.overlay_icon(icon, (bev_x, bev_y), scale=0.20)
+
+            elif 'car' in class_name:
+                icon = self.car_icon_rev if is_reverse else self.car_icon
+                self.overlay_icon(icon, (bev_x, bev_y), scale=0.18)
+
+            elif 'person' in class_name:
+                cv2.circle(self.bev_image, (bev_x, bev_y), 6, (0, 255, 0), -1)
             else:
-                bev_x = self.origin_x
-            
-            # Ensure the object stays within the visible area
-            bev_x = max(20, min(bev_x, self.width - 20))
-            bev_y = max(20, min(bev_y, self.origin_y - 10))
-            
-            # Draw object based on type
-            if 'person' in class_name:
-                # Draw person as a circle
-                radius = int(4 * size_factor)
-                cv2.circle(self.bev_image, (bev_x, bev_y), radius, color, -1)
-                
-            elif 'car' in class_name or 'vehicle' in class_name or 'truck' in class_name or 'bus' in class_name:
-                # Draw vehicle as a rectangle
-                rect_width = int(12 * size_factor)
-                rect_length = int(18 * size_factor)
-                
-                if 'truck' in class_name or 'bus' in class_name:
-                    rect_length = int(24 * size_factor)  # Longer for trucks/buses
-                
-                # Draw vehicle body
-                cv2.rectangle(self.bev_image,
-                             (bev_x - rect_width//2, bev_y - rect_length//2),
-                             (bev_x + rect_width//2, bev_y + rect_length//2),
-                             color, -1)
-                
-            elif 'plant' in class_name or 'potted plant' in class_name:
-                # Draw plant as a circle
-                radius = int(8 * size_factor)
-                cv2.circle(self.bev_image, (bev_x, bev_y), radius, color, -1)
-                
-            else:
-                # Default: draw a square for other objects
-                size = int(8 * size_factor)
-                cv2.rectangle(self.bev_image,
-                             (bev_x - size, bev_y - size),
-                             (bev_x + size, bev_y + size),
-                             color, -1)
-            
-            # Draw object ID if available
-            if obj_id is not None:
-                cv2.putText(self.bev_image, f"{obj_id}", 
-                           (bev_x - 5, bev_y - 5), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-            
-            # Draw distance line from origin to object
-            cv2.line(self.bev_image, 
-                    (self.origin_x, self.origin_y),
-                    (bev_x, bev_y),
-                    (70, 70, 70), 1)
+                cv2.circle(self.bev_image, (bev_x, bev_y), 8, (200, 200, 200), -1)
+
         except Exception as e:
-            print(f"Error drawing box in BEV: {e}")
-    
+            print(f"BEV Draw Error: {e}")
+
     def get_image(self):
-        """
-        Get the BEV image
-        
-        Returns:
-            numpy.ndarray: BEV image
-        """
-        return self.bev_image 
+        return self.bev_image
