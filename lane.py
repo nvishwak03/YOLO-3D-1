@@ -203,7 +203,7 @@ from moviepy.editor import VideoFileClip
 # Path to input video
 input_path = "videos/sample_video.mp4"
 # Output video path
-output_path = "output_videos/solidWhiteRight_output.mp4"
+out = "output_videos/solidWhiteRight_output.mp4"
 
 # Load the video clip
 clip = VideoFileClip(input_path)
@@ -212,7 +212,7 @@ clip = VideoFileClip(input_path)
 processed_clip = clip.fl_image(lane_finding_pipeline)
 
 # Save the result to a new video file
-processed_clip.write_videofile(output_path, audio=False)
+processed_clip.write_videofile(out, audio=False)
 
 yellow_output = 'output_videos/solidYellowLeft.mp4'
 clip2 = VideoFileClip('videos/sample_video.mp4')

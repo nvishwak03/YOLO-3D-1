@@ -369,13 +369,9 @@ class BirdEyeView:
         self._load_icons()
 
     def _load_icons(self):
-        self.car_icon = cv2.imread('car_icon.png', cv2.IMREAD_UNCHANGED)
-        self.car_icon_rev = cv2.imread('car_icon_reverse.png', cv2.IMREAD_UNCHANGED)
-        self.truck_icon = cv2.imread('truck_icon.png', cv2.IMREAD_UNCHANGED)
-        self.truck_icon_rev = cv2.imread('truck_icon_reverse.png', cv2.IMREAD_UNCHANGED)
-        self.bus_icon = cv2.imread('bus_icon.png', cv2.IMREAD_UNCHANGED)
-        self.bus_icon_rev = cv2.imread('bus_icon_reverse.png', cv2.IMREAD_UNCHANGED)
-        print("BEV Icons loaded.")
+        self.car_icon = cv2.imread('vehicle_icons/car_icon.png', cv2.IMREAD_UNCHANGED)
+        self.truck_icon = cv2.imread('vehicle_icons/truck_icon.png', cv2.IMREAD_UNCHANGED)
+        self.bus_icon = cv2.imread('vehicle_icons/bus_icon.png', cv2.IMREAD_UNCHANGED)
 
     def reset(self):
         self.bev_image.fill(20)
