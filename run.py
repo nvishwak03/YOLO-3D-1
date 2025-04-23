@@ -17,14 +17,15 @@ def main():
     bbox3d_estimator = BBox3DEstimator()
     bev = BirdEyeView(scale=60, size=(300, 300))
 
-    cap = cv2.VideoCapture("videos/sample_video.mp4")
+    cap = cv2.VideoCapture("output_videos/Lane_Det.mp4")
 
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter("output_videos/output.mp4", fourcc,0, (w, h))
-    dep_Video = cv2.VideoWriter(depth, fourcc,0, (w, h))
+    out = cv2.VideoWriter("output_videos/output.mp4", fourcc,fps, (w, h))
+    dep_Video = cv2.VideoWriter(depth, fourcc,fps, (w, h))
 
     while True:
         ret, frame = cap.read()
