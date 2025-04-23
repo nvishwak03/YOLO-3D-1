@@ -10,57 +10,31 @@ from depth_model import DepthEstimator
 from bbox3d_utils import BBox3DEstimator, BirdEyeView
 
 def main():
-    source = "sample_video.mp4"
-    output_path = "output.mp4"
-    depth_output_path = "depth_output.mp4"
+    depth = "output_videos/depth_out.mp4"
 
-    yolo_model_size = "nano"
-    depth_model_size = "small"
-    device = 'cpu'
-
-    conf_threshold = 0.25
-    iou_threshold = 0.45
-    classes = None
-
-    enable_tracking = True
-    enable_bev = True
-
-    print(f"Using device: {device}")
-    print("Initializing models...")
-
-    detector = ObjectDetector(yolo_model_size, conf_threshold, iou_threshold, classes, device)
-    depth_estimator = DepthEstimator(depth_model_size, device)
+    detector = ObjectDetector('nano', 0.25, 0.45, None, 'cpu')
+    depth_estimator = DepthEstimator('small', 'cpu')
     bbox3d_estimator = BBox3DEstimator()
-    bev = BirdEyeView(scale=60, size=(300, 300)) if enable_bev else None
+    bev = BirdEyeView(scale=60, size=(300, 300))
 
-    cap = cv2.VideoCapture(source)
-    if not cap.isOpened():
-        print(f"Error: Cannot open video {source}")
-        return
+    cap = cv2.VideoCapture("videos/sample_video.mp4")
 
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    depth_writer = cv2.VideoWriter(depth_output_path, fourcc, fps, (width, height))
-
-    frame_count = 0
-    start_time = time.time()
-
-    print("Starting processing...")
+    out = cv2.VideoWriter("output_videos/output.mp4", fourcc,0, (w, h))
+    dep_Video = cv2.VideoWriter(depth, fourcc,0, (w, h))
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        result_frame = frame.copy()
+        frame = frame.copy()
 
-        detection_frame, detections = detector.detect(frame, track=enable_tracking)
+        temp, detections = detector.detect(frame, track=True)
 
-        # Depth Estimation
         depth_map = depth_estimator.estimate_depth(frame)
         depth_colored = depth_estimator.colorize_depth(depth_map)
 
@@ -69,15 +43,13 @@ def main():
 
         for det in detections:
             bbox, score, class_id, obj_id = det
-            class_name = detector.get_class_names()[class_id]
-
-            # Get depth value (median in bbox)
+            Class = detector.get_class_names()[class_id]
             depth_value = depth_estimator.get_depth_in_region(depth_map, bbox)
 
             box_3d = {
                 'bbox_2d': bbox,
                 'depth_value': depth_value,
-                'class_name': class_name,
+                'class_name': Class,
                 'object_id': obj_id,
                 'score': score
             }
@@ -89,37 +61,23 @@ def main():
         bbox3d_estimator.cleanup_trackers(active_ids)
 
         for box in boxes_3d:
-            result_frame = bbox3d_estimator.draw_box_3d(result_frame, box)
-
-        if enable_bev:
+            frame = bbox3d_estimator.draw_box_3d(frame, box)
             bev.reset()
             for box in boxes_3d:
                 bev.draw_box(box)
             bev_image = bev.get_image()
 
-            bev_height = height // 3
-            bev_width = bev_height
+            bev_h = h // 3
+            bev_w = bev_h
+            bev_resized = cv2.resize(bev_image, (bev_w, bev_h))
+            frame[h - bev_h:h, 0:bev_w] = bev_resized
+            cv2.rectangle(frame, (0, h - bev_h), (bev_w, h), (255, 255, 255), 1)
+            cv2.putText(frame, "BEV", (10, h - bev_h + 20),cv2.FONT_HERSHEY_DUPLEX, 0.5, (255, 255, 255), 1)
 
-            if bev_height > 0 and bev_width > 0:
-                bev_resized = cv2.resize(bev_image, (bev_width, bev_height))
-                result_frame[height - bev_height:height, 0:bev_width] = bev_resized
-                cv2.rectangle(result_frame, (0, height - bev_height), (bev_width, height), (255, 255, 255), 1)
-                cv2.putText(result_frame, "Bird's Eye View", (10, height - bev_height + 20), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        out.write(frame)
+        dep_Video.write(cv2.resize(depth_colored, (w, h)))
 
-        frame_count += 1
-        if frame_count % 10 == 0:
-            elapsed = time.time() - start_time
-            fps_value = frame_count / elapsed
-        else:
-            fps_value = "--"
-
-        cv2.putText(result_frame, f"FPS: {fps_value}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-        out.write(result_frame)
-        depth_writer.write(cv2.resize(depth_colored, (width, height)))
-
-        cv2.imshow("3D Object Detection + BEV", result_frame)
+        cv2.imshow("3D Object Detection + BEV", frame)
         cv2.imshow("Depth Map", depth_colored)
 
         if cv2.waitKey(1) & 0xFF in [ord('q'), 27]:
@@ -127,9 +85,9 @@ def main():
 
     cap.release()
     out.release()
-    depth_writer.release()
+    dep_Video.release()
     cv2.destroyAllWindows()
-    print("Processing complete. Outputs saved.")
+    print("3D Bounding Box Done")
 
 if __name__ == "__main__":
     main()
