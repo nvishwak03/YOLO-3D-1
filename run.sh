@@ -1,5 +1,3 @@
-python -m venv env 
-source env/bin/activate
 pip install -r requirements.txt
 
 gdown "https://drive.google.com/uc?export=download&id=1F6HAz15xSWQ6oyRgOPy_JP5qgSJvyt7f"
